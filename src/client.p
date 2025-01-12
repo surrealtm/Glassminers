@@ -48,12 +48,22 @@ simulate_one_frame :: (client: *Client) {
     //
     player := get_entity(*client.gm, client.player_id);
     
-    if client.window.keys[.W] & .Repeated player.physical_position.y -= 1;
-    if client.window.keys[.S] & .Repeated player.physical_position.y += 1;
-    if client.window.keys[.A] & .Repeated player.physical_position.x -= 1;
-    if client.window.keys[.D] & .Repeated player.physical_position.x += 1;
+    move_delta: Physical_Position = .{ 0, 0 };
+    
+    if client.window.keys[.W] & .Repeated move_delta.y -= 1;
+    if client.window.keys[.S] & .Repeated move_delta.y += 1;
+    if client.window.keys[.A] & .Repeated && move_delta.y == 0 move_delta.x -= 1;
+    if client.window.keys[.D] & .Repeated && move_delta.y == 0 move_delta.x += 1;
+
+    if can_move_to_tile(*client.gm, .{ player.physical_position.x + move_delta.x, player.physical_position.y + move_delta.y }) {
+        player.physical_position.x += move_delta.x;
+        player.physical_position.y += move_delta.y;
+    }
 
     player.visual_position = .{ xx player.physical_position.x, xx player.physical_position.y };    
+
+    client.camera.world_position.x = clamp(player.visual_position.x, floor(client.camera.world_space_width / 2), floor(xx WORLD_WIDTH - client.camera.world_space_width / 2));
+    client.camera.world_position.y = floor(client.camera.world_space_height / 2);
 }
 
 client_entry_point :: () {

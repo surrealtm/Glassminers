@@ -1,16 +1,9 @@
-DRAW_GRID :: true;
-
-ENTITY_KIND_SPRITE_INDEX: [Entity_Kind.Count]s64 : .[
-    0, // Inanimate
-    1  // Player
-];
-
 SPRITE_ATLAS_COLUMNS :: 8; // How many sprites are in the atlas
 SPRITE_ATLAS_ROWS    :: 8; // How many sprites are in the atlas
 
-draw_entity :: (ge: *Graphics_Engine, camera: *Camera, texture: *GE_Texture, entity: *Entity) {
-    screen_space := screen_space_from_world_position(camera, entity.visual_position);
-    screen_size  := screen_space_from_world_size(camera, entity.visual_size);
+draw_world_space_rect :: (ge: *Graphics_Engine, camera: *Camera, texture: *GE_Texture, atlas_index: s64, visual_position: GE_Vector2, visual_size: GE_Vector2) {
+    screen_space := screen_space_from_world_position(camera, visual_position);
+    screen_size  := screen_space_from_world_size(camera, visual_size);
 
     vertices: [12]f32 = .[ screen_space.x - screen_size.x / 2, screen_space.y - screen_size.y / 2,
                            screen_space.x + screen_size.x / 2, screen_space.y - screen_size.y / 2,
@@ -19,7 +12,7 @@ draw_entity :: (ge: *Graphics_Engine, camera: *Camera, texture: *GE_Texture, ent
                            screen_space.x + screen_size.x / 2, screen_space.y - screen_size.y / 2,
                            screen_space.x + screen_size.x / 2, screen_space.y + screen_size.y / 2 ];
 
-    uv_coordinates := uv_coordinates_from_sprite_index(ENTITY_KIND_SPRITE_INDEX[entity.kind]);
+    uv_coordinates := uv_coordinates_from_sprite_index(atlas_index);
 
     uvs: [12]f32 = .[ uv_coordinates[0], uv_coordinates[1],
                       uv_coordinates[2], uv_coordinates[1],
@@ -33,8 +26,21 @@ draw_entity :: (ge: *Graphics_Engine, camera: *Camera, texture: *GE_Texture, ent
     }
 }
 
+draw_entity :: (ge: *Graphics_Engine, camera: *Camera, texture: *GE_Texture, entity: *Entity) {
+    draw_world_space_rect(ge, camera, texture, entity.kind, entity.visual_position, entity.visual_size);
+}
+
 draw_one_frame :: (client: *Client) {
     ge_clear_screen(*client.ge, .{ 100, 100, 100, 255 });
+    
+    // Draw the background
+    {
+        for x := 0; x < WORLD_WIDTH; ++x {
+            for y := 0; y < WORLD_HEIGHT; ++y {
+                draw_world_space_rect(*client.ge, *client.camera, client.sprite_atlas, Entity_Kind.Inanimate, .{ xx x, xx y }, .{ 1, 1 });
+            }
+        }
+    }
 
     // Draw all entities
     {    
@@ -43,10 +49,6 @@ draw_one_frame :: (client: *Client) {
         for i := 0; i < client.entities.count; ++i {
             draw_entity(*client.ge, *client.camera, client.sprite_atlas, array_get_pointer(*client.entities, i));
         }
-    }
-    
-    #if DRAW_GRID {
-        // @Incomplete
     }
     
     ge_imm2d_flush(*client.ge);
