@@ -1,4 +1,3 @@
-#load "basic.p";
 #load "window.p";
 #load "graphics_engine/graphics_engine.p";
 #load "os_specific.p";
@@ -66,11 +65,12 @@ simulate_one_frame :: (client: *Client) {
     client.camera.world_position.y = floor(client.camera.world_space_height / 2);
 }
 
-client_entry_point :: () {
+client_entry_point :: (shared_data: *void) -> u32 {
     //
     // Start up the engine
     //
     client: Client;
+    print("Starting the client...\n");
     
     create_memory_pool(*client.pool, 128 * Memory_Unit.Megabytes, 128 * Memory_Unit.Kilobytes);
     client.allocator = allocator_from_memory_pool(*client.pool);
@@ -83,6 +83,8 @@ client_entry_point :: () {
     // Create the world
     //    
     client.player_id = create_world(*client.gm, *client.allocator);
+
+    print("Successfully started the client.\n");
     
     while !client.window.should_close {
         frame_start := os_get_hardware_time();
@@ -102,11 +104,17 @@ client_entry_point :: () {
         draw_one_frame(*client);
                 
         frame_end := os_get_hardware_time();
-        window_ensure_frame_time(frame_start, frame_end, 144);
+        os_sleep_to_tick_rate(frame_start, frame_end, 144);
     }
+
+    print("Stopping the client...\n");
     
     ge_destroy_texture(*client.ge, client.sprite_atlas);
     ge_destroy(*client.ge);    
     destroy_window(*client.window);
-    return;
+    destroy_memory_pool(*client.pool);
+
+    print("Stopped the client.\n");
+    
+    return 0;
 }
