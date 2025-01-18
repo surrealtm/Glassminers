@@ -1,5 +1,6 @@
 #load "window.p";
 #load "graphics_engine/graphics_engine.p";
+#load "ui.p";
 #load "os_specific.p";
 
 #load "draw.p";
@@ -13,15 +14,25 @@ Camera :: struct {
     world_space_to_pixels: f32;
 }
 
+Client_State :: enum {
+    Main_Menu;
+    Ingame;
+}
+
 Client :: struct {
     // Engine structure
     window: Window;
     ge: Graphics_Engine;
+    ui: UI;
     
     pool: Memory_Pool;
     allocator: Allocator;
 
+    title_font: Font;
+    ui_font: Font;
     sprite_atlas: *GE_Texture;
+
+    state: Client_State;
     
     // Game
     #using gm: Glassminers;
@@ -42,6 +53,8 @@ update_camera :: (client: *Client) {
 }
 
 simulate_one_frame :: (client: *Client) {
+    update_camera(client);
+
     //
     // Player movement
     //
@@ -65,6 +78,50 @@ simulate_one_frame :: (client: *Client) {
     client.camera.world_position.y = floor(client.camera.world_space_height / 2);
 }
 
+do_main_menu :: (client: *Client) {
+    //
+    // Do the host window
+    //
+    {
+        ui_push_width(*client.ui, .Pixels, 256, 1);
+        state, position := ui_push_window(*client.ui, "Host", .Default, .{ 0.33, 0.33 });
+        
+        ui_label(*client.ui, false, "Name");
+        name := ui_text_input(*client.ui, "Enter your name", .Everything);
+        ui_divider(*client.ui, true);
+        
+        if ui_button(*client.ui, "Host!") && name._string {
+            print("Hosting: as %.\n", name._string);
+        }
+        
+        ui_pop_window(*client.ui);
+        ui_pop_width(*client.ui);
+    }
+    
+    //
+    // Do the join window
+    //
+    {
+        ui_push_width(*client.ui, .Pixels, 256, 1);
+        state, position := ui_push_window(*client.ui, "Join", .Default, .{ 0.66, 0.33 });
+        
+        ui_label(*client.ui, false, "Name");
+        name := ui_text_input(*client.ui, "Enter your name", .Everything);
+        ui_divider(*client.ui, true);
+        
+        ui_label(*client.ui, false, "Host");
+        address := ui_text_input(*client.ui, "Enter an address", .Everything);
+        ui_divider(*client.ui, true);
+        
+        if ui_button(*client.ui, "Join!") && address._string && name._string {
+            print("Joining: % as %.\n", address._string, name._string);
+        }
+        
+        ui_pop_window(*client.ui);
+        ui_pop_width(*client.ui);
+    }
+}
+
 client_entry_point :: (shared_data: *void) -> u32 {
     //
     // Start up the engine
@@ -77,12 +134,11 @@ client_entry_point :: (shared_data: *void) -> u32 {
     
     create_window(*client.window, "Glassminers", WINDOW_DONT_CARE, WINDOW_DONT_CARE, WINDOW_DONT_CARE, WINDOW_DONT_CARE, .Default);
     ge_create(*client.ge, *client.window, *client.allocator);
+    ge_create_font_from_file(*client.ge, *client.title_font, "data/font.ttf", 35, .Extended_Ascii);
+    ge_create_font_from_file(*client.ge, *client.ui_font, "data/font.ttf", 13, .Extended_Ascii);
     client.sprite_atlas = ge_create_texture_from_file(*client.ge, "data/sprite_atlas.png");
 
-    //
-    // Create the world
-    //    
-    client.player_id = create_world(*client.gm, *client.allocator);
+    create_ui(*client.ui, .{ *client, draw_ui_text, draw_ui_rect, set_ui_scissors, clear_ui_scissors }, UI_Dark_Theme, *client.window, *client.ui_font);
 
     print("Successfully started the client.\n");
     
@@ -94,8 +150,12 @@ client_entry_point :: (shared_data: *void) -> u32 {
         //
         {     
             update_window(*client.window);
-            update_camera(*client);
-            simulate_one_frame(*client);
+            begin_ui_frame(*client.ui, .{ 128, 26 });
+            
+            if #complete client.state == {
+            case .Main_Menu; do_main_menu(*client);
+            case .Ingame; simulate_one_frame(*client);
+            }
         }
         
         //
@@ -109,7 +169,10 @@ client_entry_point :: (shared_data: *void) -> u32 {
 
     print("Stopping the client...\n");
     
+    destroy_ui(*client.ui);
     ge_destroy_texture(*client.ge, client.sprite_atlas);
+    ge_destroy_font(*client.ge, *client.title_font);
+    ge_destroy_font(*client.ge, *client.ui_font);
     ge_destroy(*client.ge);    
     destroy_window(*client.window);
     destroy_memory_pool(*client.pool);

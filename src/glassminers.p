@@ -1,5 +1,5 @@
-CLIENT :: false;
-SERVER :: true;
+CLIENT :: true;
+SERVER :: false;
 
 SERVER_PORT :: 9876;
 
