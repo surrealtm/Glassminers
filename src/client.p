@@ -16,6 +16,7 @@ Camera :: struct {
 
 Client_State :: enum {
     Main_Menu;
+    Lobby;
     Ingame;
 }
 
@@ -33,6 +34,13 @@ Client :: struct {
     sprite_atlas: *GE_Texture;
 
     state: Client_State;
+
+    // Client
+    connection: Virtual_Connection;
+
+    // Server
+    server_thread: Thread;
+    shared_server_data: Shared_Server_Data;
     
     // Game
     #using gm: Glassminers;
@@ -78,6 +86,19 @@ simulate_one_frame :: (client: *Client) {
     client.camera.world_position.y = floor(client.camera.world_space_height / 2);
 }
 
+host_server :: (client: *Client, name: string) {
+    client.server_thread = create_thread(server_entry_point, *client.shared_server_data, false);
+    while client.shared_server_data.state == .Starting {}
+}
+
+join_server :: (client: *Client, address: string, name: string) {
+    success := create_client_connection(*client.connection, .UDP, address, SERVER_PORT);
+    
+    if success {
+        client.state = .Lobby;
+    }
+}
+
 do_main_menu :: (client: *Client) {
     //
     // Do the host window
@@ -91,7 +112,8 @@ do_main_menu :: (client: *Client) {
         ui_divider(*client.ui, true);
         
         if ui_button(*client.ui, "Host!") && name._string {
-            print("Hosting: as %.\n", name._string);
+            host_server(client, name._string);
+            join_server(client, "localhost", name._string);
         }
         
         ui_pop_window(*client.ui);
@@ -114,7 +136,7 @@ do_main_menu :: (client: *Client) {
         ui_divider(*client.ui, true);
         
         if ui_button(*client.ui, "Join!") && address._string && name._string {
-            print("Joining: % as %.\n", address._string, name._string);
+            join_server(client, address._string, name._string);
         }
         
         ui_pop_window(*client.ui);
@@ -122,7 +144,26 @@ do_main_menu :: (client: *Client) {
     }
 }
 
-client_entry_point :: (shared_data: *void) -> u32 {
+do_lobby_menu :: (client: *Client) {
+    ui_push_width(*client.ui, .Pixels, 256, 1);
+    state, position := ui_push_window(*client.ui, "Lobby...", .Default, .{ .5, .5 });
+    
+    ui_label(*client.ui, false, "Waiting for start...");
+    ui_divider(*client.ui, true);
+    
+    if ui_button(*client.ui, "Start!") {
+        print("Starting game!\n");
+    }
+    
+    if ui_button(*client.ui, "Disconnect") {
+        print("Disconnecting from lobby.\n");
+    }
+    
+    ui_pop_window(*client.ui);
+    ui_pop_width(*client.ui);
+}
+
+client_entry_point :: () -> u32 {
     //
     // Start up the engine
     //
@@ -154,7 +195,8 @@ client_entry_point :: (shared_data: *void) -> u32 {
             
             if #complete client.state == {
             case .Main_Menu; do_main_menu(*client);
-            case .Ingame; simulate_one_frame(*client);
+            case .Lobby;     do_lobby_menu(*client);
+            case .Ingame;    simulate_one_frame(*client);
             }
         }
         

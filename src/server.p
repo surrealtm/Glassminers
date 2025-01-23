@@ -7,7 +7,6 @@ Server :: struct {
     perm_pool: Memory_Pool;
     temp_arena: Memory_Arena;
     perm, temp: Allocator;
-    should_close: bool;
     
     // Connections
     connection: Virtual_Connection;
@@ -17,7 +16,9 @@ Server :: struct {
     #using gm: Glassminers;
 }
 
-server_entry_point :: (shared_data: *void) -> u32 {
+server_entry_point :: (shared_data: *Shared_Server_Data) -> u32 {
+    shared_data.state = .Starting;
+
     //
     // Start up the engine
     //
@@ -28,16 +29,21 @@ server_entry_point :: (shared_data: *void) -> u32 {
     create_memory_arena(*server.temp_arena, 2 * Memory_Unit.Megabytes, 128 * Memory_Unit.Kilobytes, false);
     server.perm = allocator_from_memory_pool(*server.perm_pool);
     server.temp = allocator_from_memory_arena(*server.temp_arena);
-    server.should_close = false;
     
     //
     // Start up the connection
     //
-    create_server_connection(*server.connection, .UDP, SERVER_PORT);
+    success := create_server_connection(*server.connection, .UDP, SERVER_PORT);
 
-    print("Successfully started the server.\n");
-    
-    while !server.should_close {
+    if success {
+        print("Successfully started the server.\n");
+        shared_data.state = .Closing;
+    } else {
+        print("Failed to start the server!\n");
+        shared_data.state = .Running;
+    }
+        
+    while shared_data.state == .Running {
         tick_start := os_get_hardware_time();
 
         //
@@ -72,6 +78,8 @@ server_entry_point :: (shared_data: *void) -> u32 {
     destroy_memory_arena(*server.temp_arena);
  
     print("Stopped the server.\n");
+
+    shared_data.state = .Closed;
            
     return 0;
 }

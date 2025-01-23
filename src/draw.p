@@ -60,7 +60,7 @@ draw_one_frame :: (client: *Client) {
     ge_clear_screen(*client.ge, .{ 50, 50, 60, 255 });
     
     if #complete client.state == {
-      case .Main_Menu;
+      case .Main_Menu, .Lobby;
         draw_ui_frame(*client.ui);
         ge_draw_text(*client.ge, *client.title_font, "GlassMiners", xx client.window.w * 0.5, xx client.window.h * 0.25, .Center | .Median, .{ 255, 255, 255, 255 });
         ge_imm2d_flush(*client.ge);

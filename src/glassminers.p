@@ -1,4 +1,3 @@
-CLIENT :: true;
 SERVER :: false;
 
 SERVER_PORT :: 9876;
@@ -7,8 +6,8 @@ SERVER_PORT :: 9876;
 #load "threads.p";
 #load "virtual_connection.p";
 
-#if CLIENT #load "client.p";
-#if SERVER #load "server.p";
+#load "client.p";
+#load "server.p";
 
 WORLD_HEIGHT :: 5;
 WORLD_WIDTH  :: 64;
@@ -32,15 +31,24 @@ Entity :: struct {
     kind: Entity_Kind;
     physical_position: Physical_Position;
     
-#if CLIENT {
     visual_position: GE_Vector2;
     visual_size: GE_Vector2;
-}
 }
 
 Glassminers :: struct {
     entities: [..]Entity;
     entity_indirection: [MAX_ENTITIES]PID;
+}
+
+Server_State :: enum {
+    Starting;
+    Running;
+    Closing;
+    Closed;
+}
+
+Shared_Server_Data :: struct {
+    state: Server_State;
 }
 
 create_glassminers :: (gm: *Glassminers, allocator: *Allocator) {
@@ -59,11 +67,8 @@ create_entity :: (gm: *Glassminers, kind: Entity_Kind, physical_position: Physic
     entity.id   = id;
     entity.kind = kind;
     entity.physical_position = physical_position;
-    
-#if CLIENT {
     entity.visual_position   = .{ xx entity.physical_position.x, xx entity.physical_position.y };
     entity.visual_size       = .{ 1, 1 };
-}
     
     return id, entity;
 }
@@ -115,14 +120,11 @@ main :: () -> s32 {
     os_enable_high_resolution_timer();
     set_working_directory_to_executable_path();
 
-    #if CLIENT && SERVER {
-        server_thread: Thread = create_thread(server_entry_point, null, false);
-        client_entry_point(null);
-        join_thread(*server_thread);
-    } #else #if CLIENT {
-        client_entry_point(null);
-    } #else #if SERVER {
-        server_entry_point(null);
+    #if SERVER {
+        server_data: Shared_Server_Data = ---;
+        server_entry_point(*server_data);
+    } #else {
+        client_entry_point();    
     }
 
     return 0;
